@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  categories   Category[]
+  transactions Transaction[]
+  receipts     Receipt[]
+  budgets      Budget[]
+  insights     Insight[]
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  name         String
+  color        String        @default("#1b5e45")
+  icon         String?
+  userId       String?
+  user         User?         @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+  budgets      Budget[]
+}
+
+enum TxSource {
+  MANUAL
+  RECEIPT
+  CSV
+}
+
+model Transaction {
+  id          String    @id @default(cuid())
+  amount      Decimal   @db.Decimal(12, 2)
+  date        DateTime
+  description String?
+  source      TxSource  @default(MANUAL)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  receiptId   String?   @unique
+  receipt     Receipt?  @relation(fields: [receiptId], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, date])
+}
+
+model Receipt {
+  id            String       @id @default(cuid())
+  imageUrl      String
+  status        String       @default("pending")
+  extractedJson Json?
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  transaction   Transaction?
+  createdAt     DateTime     @default(now())
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  period     String
+  limit      Decimal  @db.Decimal(12, 2)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+}
+
+model Insight {
+  id        String   @id @default(cuid())
+  period    String
+  text      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}

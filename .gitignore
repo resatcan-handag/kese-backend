@@ -1,0 +1,39 @@
+# Bağımlılıklar
+node_modules/
+
+# Derleme çıktısı (NestJS)
+dist/
+build/
+
+# Ortam değişkenleri (gizli — commit'lenmez; örnek dosya hariç)
+.env
+.env.*
+!.env.example
+
+# Prisma
+# NOT: prisma/schema.prisma ve prisma/migrations/ COMMIT'lenir (şema + geçmiş).
+# Üretilen Prisma istemcisi node_modules içinde olduğundan zaten hariç tutulur.
+
+# TypeScript
+*.tsbuildinfo
+
+# Loglar
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Editör / IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.sw?
+
+# İşletim sistemi
+.DS_Store
+Thumbs.db
+
+# Önbellek / test
+coverage/
+.eslintcache
