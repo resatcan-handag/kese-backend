@@ -14,4 +14,9 @@ export class DashboardController {
   insights() {
     return this.service.insights();
   }
+
+  @Get("trend")
+  trend() {
+    return this.service.trend();
+  }
 }

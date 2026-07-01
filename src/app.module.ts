@@ -5,6 +5,8 @@ import { AiModule } from "./ai/ai.module";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { CategoriesModule } from "./categories/categories.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { ReceiptsModule } from "./receipts/receipts.module";
+import { ImportModule } from "./import/import.module";
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { DashboardModule } from "./dashboard/dashboard.module";
     TransactionsModule,
     CategoriesModule,
     DashboardModule,
+    ReceiptsModule,
+    ImportModule,
   ],
 })
 export class AppModule {}

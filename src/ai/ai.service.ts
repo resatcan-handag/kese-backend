@@ -33,6 +33,17 @@ export class AiService {
     items: Array<{ name: string; amount: number }>;
   }> {
     // TODO: Goruntu LLM cagrisi — fis fotografini ver, yapisal alanlari al.
-    return { merchant: "Bilinmiyor", total: 0, date: new Date().toISOString(), items: [] };
+    // Simdilik yer tutucu: gercek bir goruntu LLM baglanana kadar ornek alanlar donuyor
+    // ki ReceiptModal uctan uca gercek veriyle calissin.
+    const items = [
+      { name: "Sut 1L", amount: 42.0 },
+      { name: "Ekmek", amount: 18.5 },
+      { name: "Yumurta 15'li", amount: 68.9 },
+      { name: "Deterjan", amount: 126.0 },
+      { name: "Domates 1kg", amount: 34.2 },
+      { name: "Tavuk gogsu", amount: 96.9 },
+    ];
+    const total = items.reduce((s, it) => s + it.amount, 0);
+    return { merchant: "Migros", total, date: new Date().toISOString(), items };
   }
 }
