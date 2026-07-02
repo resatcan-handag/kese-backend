@@ -1,26 +1,22 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../src/auth/security";
+import { DEFAULT_CATEGORIES } from "../src/auth/default-categories";
 
 const prisma = new PrismaClient();
 
+// Demo giris: ada@kese.app / demo1234
+const DEMO_PASSWORD = "demo1234";
+
 async function main() {
+  const passwordHash = hashPassword(DEMO_PASSWORD);
   const user = await prisma.user.upsert({
     where: { email: "ada@kese.app" },
-    update: {},
-    create: { email: "ada@kese.app", passwordHash: "demo" },
+    update: { passwordHash },
+    create: { email: "ada@kese.app", passwordHash },
   });
 
-  const catData = [
-    { name: "Market", color: "#1b5e45" },
-    { name: "Faturalar", color: "#5b53c6" },
-    { name: "Yemek", color: "#c8553d" },
-    { name: "Alisveris", color: "#a65a78" },
-    { name: "Ulasim", color: "#3e6b8c" },
-    { name: "Eglence", color: "#b8852e" },
-    { name: "Saglik", color: "#2e7d6b" },
-  ];
-
   const cats: Record<string, string> = {};
-  for (const c of catData) {
+  for (const c of DEFAULT_CATEGORIES) {
     const cat = await prisma.category.create({ data: { ...c, userId: user.id } });
     cats[c.name] = cat.id;
   }

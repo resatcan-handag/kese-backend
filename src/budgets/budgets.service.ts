@@ -1,15 +1,17 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Scope } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { CurrentUser } from "../auth/current-user";
 import { SetBudgetDto } from "./dto";
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class BudgetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currentUser: CurrentUser,
+  ) {}
 
-  // TODO: auth eklenince oturum kullanicisi kullanilacak.
   private async currentUserId(): Promise<string> {
-    const user = await this.prisma.user.findFirstOrThrow();
-    return user.id;
+    return this.currentUser.id;
   }
 
   // Harcamanin bulundugu son islemin ayi (dashboard/trend ile ayni pencere).
@@ -32,7 +34,10 @@ export class BudgetsService {
     const userId = await this.currentUserId();
     const { start, end, period, label } = await this.activeMonth(userId);
 
-    const cats = await this.prisma.category.findMany({ orderBy: { name: "asc" } });
+    const cats = await this.prisma.category.findMany({
+      where: { userId },
+      orderBy: { name: "asc" },
+    });
     const budgets = await this.prisma.budget.findMany({ where: { userId, period } });
     const grouped = await this.prisma.transaction.groupBy({
       by: ["categoryId"],

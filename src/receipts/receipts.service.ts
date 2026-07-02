@@ -1,19 +1,19 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, Scope } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AiService } from "../ai/ai.service";
+import { CurrentUser } from "../auth/current-user";
 import { ConfirmReceiptDto, UploadReceiptDto } from "./dto";
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class ReceiptsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly currentUser: CurrentUser,
   ) {}
 
-  // TODO: auth eklenince oturum kullanicisi kullanilacak.
   private async currentUserId(): Promise<string> {
-    const user = await this.prisma.user.findFirstOrThrow();
-    return user.id;
+    return this.currentUser.id;
   }
 
   // Fis yukle -> kaydet -> AI ile alanlari cikar -> kategori oner.
@@ -27,7 +27,7 @@ export class ReceiptsService {
     const extracted = await this.ai.extractReceipt(receipt.imageUrl);
 
     // Satici adindan kategori oner.
-    const cats = await this.prisma.category.findMany();
+    const cats = await this.prisma.category.findMany({ where: { userId } });
     const suggestedName = await this.ai.suggestCategory(
       extracted.merchant,
       cats.map((c) => c.name),

@@ -1,19 +1,19 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Scope } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AiService } from "../ai/ai.service";
+import { CurrentUser } from "../auth/current-user";
 import { CreateTransactionDto, UpdateTransactionDto } from "./dto";
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class TransactionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly currentUser: CurrentUser,
   ) {}
 
-  // TODO: auth eklenince oturum kullanicisi kullanilacak.
   private async currentUserId(): Promise<string> {
-    const user = await this.prisma.user.findFirstOrThrow();
-    return user.id;
+    return this.currentUser.id;
   }
 
   async findAll(query: { categoryId?: string }) {
@@ -31,7 +31,7 @@ export class TransactionsService {
 
     // Kategori verilmemisse AI onersin.
     if (!categoryId && dto.description) {
-      const cats = await this.prisma.category.findMany();
+      const cats = await this.prisma.category.findMany({ where: { userId } });
       const name = await this.ai.suggestCategory(
         dto.description,
         cats.map((c) => c.name),
@@ -52,8 +52,10 @@ export class TransactionsService {
   }
 
   async update(id: string, dto: UpdateTransactionDto) {
-    return this.prisma.transaction.update({
-      where: { id },
+    const userId = await this.currentUserId();
+    // updateMany ile kullaniciya gore kapsa (baskasinin kaydini degistiremez).
+    await this.prisma.transaction.updateMany({
+      where: { id, userId },
       data: {
         amount: dto.amount,
         date: dto.date ? new Date(dto.date) : undefined,
@@ -61,10 +63,15 @@ export class TransactionsService {
         categoryId: dto.categoryId,
       },
     });
+    return this.prisma.transaction.findFirst({
+      where: { id, userId },
+      include: { category: true },
+    });
   }
 
   async remove(id: string) {
-    await this.prisma.transaction.delete({ where: { id } });
+    const userId = await this.currentUserId();
+    await this.prisma.transaction.deleteMany({ where: { id, userId } });
     return { ok: true };
   }
 }

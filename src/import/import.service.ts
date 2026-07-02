@@ -1,25 +1,25 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Scope } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AiService } from "../ai/ai.service";
+import { CurrentUser } from "../auth/current-user";
 import { ImportCsvDto } from "./dto";
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class ImportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly currentUser: CurrentUser,
   ) {}
 
-  // TODO: auth eklenince oturum kullanicisi kullanilacak.
   private async currentUserId(): Promise<string> {
-    const user = await this.prisma.user.findFirstOrThrow();
-    return user.id;
+    return this.currentUser.id;
   }
 
   // Eslenmis CSV satirlarindan CSV kaynakli islemler olustur.
   async csv(dto: ImportCsvDto) {
     const userId = await this.currentUserId();
-    const cats = await this.prisma.category.findMany();
+    const cats = await this.prisma.category.findMany({ where: { userId } });
     const names = cats.map((c) => c.name);
 
     const data = await Promise.all(
