@@ -48,11 +48,14 @@ export class DashboardService {
   }
 
   async insights() {
+    const userId = await this.currentUserId();
     const { total, categories } = await this.summary();
-    const text = await this.ai.generateInsight({
-      total,
-      topCategory: categories[0]?.category,
-    });
+    // Veri imzasi: toplam + kategori dagilimi. Degismedikce icgoru yeniden uretilmez.
+    const sig = `${total}|` + categories.map((c) => `${c.category}:${c.amount}`).join(",");
+    const text = await this.ai.generateInsight(
+      { total, topCategory: categories[0]?.category },
+      { userId, sig },
+    );
     return { text };
   }
 
