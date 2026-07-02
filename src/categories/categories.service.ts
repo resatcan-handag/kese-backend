@@ -28,4 +28,12 @@ export class CategoriesService {
     );
     return { suggested };
   }
+
+  // Kategoriyi sil. Once bagli butceleri sil (zorunlu iliski);
+  // islemler optional oldugu icin categoryId otomatik null'a duser (SetNull).
+  async remove(id: string) {
+    await this.prisma.budget.deleteMany({ where: { categoryId: id } });
+    await this.prisma.category.delete({ where: { id } });
+    return { ok: true };
+  }
 }
