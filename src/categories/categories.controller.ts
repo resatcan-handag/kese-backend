@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { CategoriesService } from "./categories.service";
-import { CreateCategoryDto } from "./dto";
+import { CreateCategoryDto, UpdateCategoryDto } from "./dto";
 
 @Controller("categories")
 export class CategoriesController {
@@ -19,6 +19,11 @@ export class CategoriesController {
   @Post("suggest")
   suggest(@Body("description") description: string) {
     return this.service.suggest(description ?? "");
+  }
+
+  @Patch(":id")
+  update(@Param("id") id: string, @Body() dto: UpdateCategoryDto) {
+    return this.service.update(id, dto);
   }
 
   @Delete(":id")

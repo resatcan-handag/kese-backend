@@ -12,3 +12,17 @@ export class CreateCategoryDto {
   @IsString()
   icon?: string;
 }
+
+export class UpdateCategoryDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  color?: string;
+
+  @IsOptional()
+  @IsString()
+  icon?: string;
+}

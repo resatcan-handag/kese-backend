@@ -2,7 +2,7 @@ import { Injectable, Scope } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AiService } from "../ai/ai.service";
 import { CurrentUser } from "../auth/current-user";
-import { CreateCategoryDto } from "./dto";
+import { CreateCategoryDto, UpdateCategoryDto } from "./dto";
 
 @Injectable({ scope: Scope.REQUEST })
 export class CategoriesService {
@@ -39,6 +39,16 @@ export class CategoriesService {
       cats.map((c) => c.name),
     );
     return { suggested };
+  }
+
+  // Kategoriyi guncelle (yalnizca kullanicinin kendi kategorisi).
+  async update(id: string, dto: UpdateCategoryDto) {
+    const userId = this.currentUser.id;
+    await this.prisma.category.updateMany({
+      where: { id, userId },
+      data: { name: dto.name, color: dto.color, icon: dto.icon },
+    });
+    return this.prisma.category.findFirst({ where: { id, userId } });
   }
 
   // Kategoriyi sil (yalnizca kullanicinin kendi kategorisi). Once bagli butceler,
