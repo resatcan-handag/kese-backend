@@ -15,6 +15,15 @@ async function main() {
     create: { email: "ada@kese.app", passwordHash },
   });
 
+  // Idempotent: demo kullanicinin mevcut verisini temizle (tekrar calisinca
+  // kategoriler/islemler kopyalanmasin). FK sirasi: once islemler, sonra
+  // butceler/fisler/icgoruler, en son kategoriler.
+  await prisma.transaction.deleteMany({ where: { userId: user.id } });
+  await prisma.budget.deleteMany({ where: { userId: user.id } });
+  await prisma.receipt.deleteMany({ where: { userId: user.id } });
+  await prisma.insight.deleteMany({ where: { userId: user.id } });
+  await prisma.category.deleteMany({ where: { userId: user.id } });
+
   const cats: Record<string, string> = {};
   for (const c of DEFAULT_CATEGORIES) {
     const cat = await prisma.category.create({ data: { ...c, userId: user.id } });
