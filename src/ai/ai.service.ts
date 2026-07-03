@@ -1,10 +1,13 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 
 // AI icgorusu icin yerel + ucretsiz motor: Ollama (https://ollama.com).
 // Kurulum: `ollama pull llama3.2` sonra `ollama serve` (genelde otomatik acik).
 // Ollama calismiyorsa/erisilemezse her metod ucretsiz placeholder'a duser.
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2";
+// Fis okuma icin GORSEL model gerekir (metin modeli goruntu okuyamaz).
+// Kurulum ornegi: `ollama pull llama3.2-vision` (alternatif: llava, minicpm-v, moondream).
+const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL ?? "llama3.2-vision";
 
 interface ExtractedReceipt {
   merchant: string;
@@ -15,6 +18,7 @@ interface ExtractedReceipt {
 
 @Injectable()
 export class AiService {
+  private readonly logger = new Logger(AiService.name);
   // Kullanici basina son icgoru (veri imzasiyla). Veri degismedikce yeniden uretilmez.
   private insightCache = new Map<string, { sig: string; text: string }>();
 
@@ -57,10 +61,23 @@ export class AiService {
     return this.placeholderInsight(stats);
   }
 
-  // Fis gorselinden alanlari cikar. Gorsel LLM'i (Ollama'da llava/llama3.2-vision)
-  // henuz bagli degil; simdilik ornek alanlar (ReceiptModal uctan uca calissin diye).
-  async extractReceipt(_imageUrl: string): Promise<ExtractedReceipt> {
-    return this.placeholderReceipt();
+  // Fis gorselinden alanlari cikar — yerel Ollama gorsel modeliyle (ucretsiz).
+  // Model yoksa/basarisizsa placeholder'a duser (uygulama uctan uca calisir).
+  async extractReceipt(imageUrl: string): Promise<ExtractedReceipt> {
+    const base64 = this.dataUrlToBase64(imageUrl);
+    if (!base64) {
+      this.logger.warn("Fis: gecersiz gorsel (data URL degil) — ornek veriye dusuldu.");
+      return this.placeholderReceipt();
+    }
+    const raw = await this.ollamaVision(base64);
+    if (!raw) {
+      this.logger.warn(
+        `Fis: gorsel model okuyamadi — ornek veriye dusuldu. Model "${OLLAMA_VISION_MODEL}" kurulu mu? (ollama pull ${OLLAMA_VISION_MODEL})`,
+      );
+      return this.placeholderReceipt();
+    }
+    this.logger.log(`Fis okundu: ${raw.merchant ?? "?"} / ${raw.total ?? "?"}`);
+    return this.normalizeReceipt(raw);
   }
 
   // --- Yardimcilar ---
@@ -93,6 +110,80 @@ export class AiService {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  // Ollama gorsel modeline fisi ver, yapisal JSON iste. Erisilemezse null.
+  private async ollamaVision(imageBase64: string): Promise<Partial<ExtractedReceipt> | null> {
+    const controller = new AbortController();
+    // Gorsel modeller yavas olabilir (ilk yuklemede model belleklenir).
+    const timer = setTimeout(() => controller.abort(), 90000);
+    try {
+      const res = await fetch(`${OLLAMA_URL}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: OLLAMA_VISION_MODEL,
+          stream: false,
+          format: "json", // Ollama'yi gecerli JSON dondurmeye zorlar
+          messages: [
+            {
+              role: "user",
+              content:
+                "Bu fis/fatura gorselini oku ve SADECE su JSON'u dondur: " +
+                '{"merchant": string, "total": number, "date": "YYYY-MM-DD", ' +
+                '"items": [{"name": string, "amount": number}]}. ' +
+                "merchant satici/magaza adi, total genel toplam, date fis tarihi. " +
+                "Tutarlar nokta ondalikli sayi (orn. 42.50). Gorunmeyen alani bos birak.",
+              images: [imageBase64],
+            },
+          ],
+          options: { temperature: 0 },
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        this.logger.warn(`Ollama vision ${res.status}: ${body.slice(0, 200)}`);
+        return null;
+      }
+      const data = (await res.json()) as { message?: { content?: string } };
+      const content = data.message?.content?.trim();
+      if (!content) return null;
+      return JSON.parse(content) as Partial<ExtractedReceipt>;
+    } catch (e) {
+      this.logger.warn(
+        `Ollama vision hata: ${e instanceof Error ? e.message : String(e)} ` +
+          `(Ollama calisiyor mu? ${OLLAMA_URL})`,
+      );
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // data:image/...;base64,---- -> ---- (Ollama ham base64 ister, on ek istemez).
+  private dataUrlToBase64(url: string): string | null {
+    const m = /^data:image\/[a-z0-9.+-]+;base64,(.+)$/i.exec(url ?? "");
+    return m ? m[1] : null;
+  }
+
+  // Modelin dondurdugu JSON'u guvenli sekilde ExtractedReceipt'e cevir.
+  private normalizeReceipt(input: Partial<ExtractedReceipt>): ExtractedReceipt {
+    const items = Array.isArray(input?.items)
+      ? input.items
+          .filter((it) => it && typeof it.name === "string" && it.name.trim())
+          .map((it) => ({ name: String(it.name).trim(), amount: Number(it.amount) || 0 }))
+      : [];
+    const total = Number(input?.total) || items.reduce((s, it) => s + it.amount, 0);
+    const date =
+      typeof input?.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(input.date)
+        ? input.date.slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+    const merchant =
+      typeof input?.merchant === "string" && input.merchant.trim()
+        ? input.merchant.trim()
+        : "Bilinmiyor";
+    return { merchant, total, date, items };
   }
 
   private placeholderInsight(stats: { total: number; topCategory?: string }): string {
