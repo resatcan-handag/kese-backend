@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put } from "@nestjs/common";
+import { Body, Controller, Get, Put, Query } from "@nestjs/common";
 import { BudgetsService } from "./budgets.service";
 import { SetBudgetDto } from "./dto";
 
@@ -7,8 +7,8 @@ export class BudgetsController {
   constructor(private readonly service: BudgetsService) {}
 
   @Get()
-  list() {
-    return this.service.list();
+  list(@Query("month") month?: string) {
+    return this.service.list(month);
   }
 
   @Put()

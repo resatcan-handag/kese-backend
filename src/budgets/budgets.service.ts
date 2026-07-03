@@ -14,14 +14,21 @@ export class BudgetsService {
     return this.currentUser.id;
   }
 
-  // Harcamanin bulundugu son islemin ayi (dashboard/trend ile ayni pencere).
-  private async activeMonth(userId: string) {
-    const latest = await this.prisma.transaction.findFirst({
-      where: { userId },
-      orderBy: { date: "desc" },
-      select: { date: true },
-    });
-    const ref = latest?.date ?? new Date();
+  // Ay penceresi: month "YYYY-MM" verilirse o ay; yoksa son islemin ayi
+  // (dashboard/trend ile ayni mantik).
+  private async activeMonth(userId: string, month?: string) {
+    const m = month?.match(/^(\d{4})-(\d{2})$/);
+    let ref: Date;
+    if (m) {
+      ref = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+    } else {
+      const latest = await this.prisma.transaction.findFirst({
+        where: { userId },
+        orderBy: { date: "desc" },
+        select: { date: true },
+      });
+      ref = latest?.date ?? new Date();
+    }
     const start = new Date(ref.getFullYear(), ref.getMonth(), 1);
     const end = new Date(ref.getFullYear(), ref.getMonth() + 1, 1);
     const period = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
@@ -29,10 +36,10 @@ export class BudgetsService {
     return { start, end, period, label };
   }
 
-  // Aktif ay icin her kategorinin limiti + harcamasi.
-  async list() {
+  // Secili ay icin her kategorinin limiti + harcamasi.
+  async list(month?: string) {
     const userId = await this.currentUserId();
-    const { start, end, period, label } = await this.activeMonth(userId);
+    const { start, end, period, label } = await this.activeMonth(userId, month);
 
     const cats = await this.prisma.category.findMany({
       where: { userId },
@@ -70,10 +77,10 @@ export class BudgetsService {
     return { period, label, totalLimit, totalSpent, items };
   }
 
-  // Kategori limitini ata/guncelle; 0 ise kaldir.
+  // Kategori limitini (secili ay icin) ata/guncelle; 0 ise kaldir.
   async set(dto: SetBudgetDto) {
     const userId = await this.currentUserId();
-    const { period } = await this.activeMonth(userId);
+    const { period } = await this.activeMonth(userId, dto.month);
 
     const existing = await this.prisma.budget.findFirst({
       where: { userId, categoryId: dto.categoryId, period },
