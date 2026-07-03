@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Scope } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CurrentUser } from "../auth/current-user";
 import { hashPassword, verifyPassword } from "../auth/security";
-import { ChangePasswordDto } from "./dto";
+import { ChangePasswordDto, DeleteAccountDto } from "./dto";
 
 @Injectable({ scope: Scope.REQUEST })
 export class UsersService {
@@ -34,6 +34,22 @@ export class UsersService {
       where: { id: u.id },
       data: { passwordHash: hashPassword(dto.newPassword) },
     });
+    return { ok: true };
+  }
+
+  // Hesabı sil: şifre onayı sonrası tüm veriyi (FK sırasına göre) + kullanıcıyı sil.
+  async deleteAccount(dto: DeleteAccountDto) {
+    const userId = this.currentUser.id;
+    const u = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!verifyPassword(dto.password, u.passwordHash)) {
+      throw new BadRequestException("Şifre hatalı.");
+    }
+    await this.prisma.transaction.deleteMany({ where: { userId } });
+    await this.prisma.budget.deleteMany({ where: { userId } });
+    await this.prisma.receipt.deleteMany({ where: { userId } });
+    await this.prisma.insight.deleteMany({ where: { userId } });
+    await this.prisma.category.deleteMany({ where: { userId } });
+    await this.prisma.user.delete({ where: { id: userId } });
     return { ok: true };
   }
 }

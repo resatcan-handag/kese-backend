@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Post } from "@nestjs/common";
 import { UsersService } from "./users.service";
-import { ChangePasswordDto } from "./dto";
+import { ChangePasswordDto, DeleteAccountDto } from "./dto";
 
 @Controller("users")
 export class UsersController {
@@ -14,5 +14,10 @@ export class UsersController {
   @Post("change-password")
   changePassword(@Body() dto: ChangePasswordDto) {
     return this.service.changePassword(dto);
+  }
+
+  @Delete("me")
+  deleteAccount(@Body() dto: DeleteAccountDto) {
+    return this.service.deleteAccount(dto);
   }
 }
