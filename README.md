@@ -1,38 +1,56 @@
 # Kese — Backend (API)
 
-NestJS + Prisma + PostgreSQL. Harcama takip uygulamasinin API'si.
+NestJS + Prisma + PostgreSQL. Harcama takip uygulamasının API'si. Kimlik doğrulama JWT ile; AI yerel Ollama ile (ücretsiz).
 
 ## Kurulum
 
-1. Bagimliliklari kur: `npm install`
-2. `.env` olustur (`.env.example`'i kopyala) ve `DATABASE_URL`'i kendi veritabanina gore ayarla.
-3. Prisma client uret ve tablolari olustur:
-   - `npx prisma generate`
-   - `npx prisma migrate dev --name init`
-4. Ornek veriyi yukle: `npm run seed`
-5. Calistir: `npm run start:dev`
+```bash
+npm install
+cp .env.example .env          # DATABASE_URL + JWT_SECRET'i düzenle
+npx prisma generate
+npx prisma migrate dev --name init
+npm run seed                  # demo giriş: ada@kese.app / demo1234
+npm run start:dev             # http://localhost:3000/api
+```
 
-API: http://localhost:3000/api
+`.env` değişkenleri: `DATABASE_URL`, `PORT`, `JWT_SECRET` ve (opsiyonel AI için) `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL`.
 
-## Uclar
-- GET    /api/dashboard/summary    Pano ozeti (toplam + kategori dagilimi)
-- GET    /api/dashboard/insights   AI icgoru (simdilik stub)
-- GET    /api/transactions         Islemler (?categoryId ile filtre)
-- POST   /api/transactions         Islem ekle (kategori bossa AI onerir)
-- PATCH  /api/transactions/:id     Guncelle
-- DELETE /api/transactions/:id     Sil
-- GET    /api/categories           Kategoriler
-- POST   /api/categories           Kategori ekle
-- POST   /api/categories/suggest   Aciklamadan AI kategori onerisi
+## Kimlik doğrulama
 
-## AI nerede?
-`src/ai/ai.service.ts` icinde uc yer tutucu var: suggestCategory, generateInsight, extractReceipt.
-Su an basit kural/sabit donuyorlar; gercek LLM (or. Anthropic) cagrisini buraya koyacaksin.
+- `POST /api/auth/register` ve `POST /api/auth/login` **herkese açık** (`@Public`), gövde: `{ email, password }`, yanıt: `{ token, user }`.
+- Diğer **tüm uçlar** `Authorization: Bearer <token>` ister (global `JwtAuthGuard`).
+- Kayıtta kullanıcıya varsayılan kategoriler oluşturulur. JWT + şifre (scrypt) bağımlılıksız, Node `crypto` ile (`src/auth/security.ts`).
 
-## Onyuze baglama
-Onyuzdeki `src/data.ts` yerine bu uclara fetch atilir (or. GET /api/dashboard/summary).
-CORS acik oldugundan localhost:5173'ten cagrilabilir.
+## Uçlar (hepsi `/api` önekli, auth hariç token ister)
 
-## Siradaki adimlar
-- Receipts uclari (POST /receipts, /receipts/:id/confirm) + dosya yukleme.
-- Auth (kayit/giris, JWT) ve kullanici bazli filtreleme (su an tek demo kullanici).
+| Uç | Açıklama |
+|---|---|
+| `POST /auth/register`, `POST /auth/login` | Kayıt / giriş (public) |
+| `GET  /users/me` | Oturumdaki kullanıcı |
+| `GET  /dashboard/summary` | Toplam + kategori dağılımı |
+| `GET  /dashboard/insights` | AI içgörü (Ollama; veriye göre önbellekli) |
+| `GET  /dashboard/trend` | Günlük harcama serisi |
+| `GET  /transactions` | İşlemler (`?categoryId` ile filtre) |
+| `POST /transactions` | İşlem ekle (kategori boşsa AI/kural önerir) |
+| `PATCH /transactions/:id`, `DELETE /transactions/:id` | Güncelle / sil |
+| `GET  /categories` | Kategoriler |
+| `POST /categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | Ekle / düzenle / sil |
+| `POST /categories/suggest` | Açıklamadan kategori önerisi |
+| `POST /receipts` | Fiş yükle (data URL) → AI okur + kategori önerir |
+| `POST /receipts/:id/confirm` | Okunan alanları onayla → RECEIPT işlemi oluştur |
+| `POST /import/csv` | Eşlenmiş satırlardan toplu CSV işlemi |
+| `GET  /budgets`, `PUT /budgets` | Aktif ay kategori limiti + harcama; limit ata/kaldır |
+
+## AI nerede? (`src/ai/ai.service.ts`)
+
+- `generateInsight` → yerel **Ollama** (`/api/chat`, `OLLAMA_MODEL`, varsayılan `llama3.2`). Veri değişmedikçe yeniden üretilmez (önbellek).
+- `extractReceipt` → **Ollama görsel** modeli (`OLLAMA_VISION_MODEL`, ör. `llava` / `llama3.2-vision`). Fiş data URL'inin base64'ü modele gönderilir.
+- `suggestCategory` → kural-tabanlı (ücretsiz/hızlı).
+
+Ollama kurulu/açık değilse her metod ücretsiz **placeholder**'a düşer; uygulama uçtan uca çalışmaya devam eder. Ücretli bulut LLM'i kullanılmaz.
+
+## Notlar
+
+- Prisma `Decimal` para için; API'ye dönerken sayıya çevrilir (`.toNumber()`).
+- Yeni kaynak eklerken `src/transactions/` klasörünü örnek al (modül/servis/controller/dto).
+- Fiş fotoğrafı JSON gövdesinde geldiği için gövde limiti 15 MB'a çıkarılmıştır (`main.ts`).
