@@ -15,17 +15,41 @@ export class DashboardService {
     return this.currentUser.id;
   }
 
-  async summary() {
+  // Ay penceresi: month "YYYY-MM" verilirse o ay; yoksa son islemin ayi
+  // (seed Haziran'da, varsayilan bos kalmasin diye).
+  private async monthWindow(userId: string, month?: string) {
+    const m = month?.match(/^(\d{4})-(\d{2})$/);
+    let ref: Date;
+    if (m) {
+      ref = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+    } else {
+      const latest = await this.prisma.transaction.findFirst({
+        where: { userId },
+        orderBy: { date: "desc" },
+        select: { date: true },
+      });
+      ref = latest?.date ?? new Date();
+    }
+    const start = new Date(ref.getFullYear(), ref.getMonth(), 1);
+    const end = new Date(ref.getFullYear(), ref.getMonth() + 1, 1);
+    const daysInMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
+    const label = start.toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
+    return { start, end, daysInMonth, label };
+  }
+
+  async summary(month?: string) {
     const userId = await this.currentUserId();
+    const { start, end, label } = await this.monthWindow(userId, month);
+    const where = { userId, date: { gte: start, lt: end } };
 
     const totalAgg = await this.prisma.transaction.aggregate({
-      where: { userId },
+      where,
       _sum: { amount: true },
     });
 
     const grouped = await this.prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: { userId },
+      where,
       _sum: { amount: true },
     });
 
@@ -44,14 +68,15 @@ export class DashboardService {
     return {
       total: totalAgg._sum.amount ? totalAgg._sum.amount.toNumber() : 0,
       categories,
+      label,
     };
   }
 
-  async insights() {
+  async insights(month?: string) {
     const userId = await this.currentUserId();
-    const { total, categories } = await this.summary();
-    // Veri imzasi: toplam + kategori dagilimi. Degismedikce icgoru yeniden uretilmez.
-    const sig = `${total}|` + categories.map((c) => `${c.category}:${c.amount}`).join(",");
+    const { total, categories, label } = await this.summary(month);
+    // Veri imzasi: ay + toplam + kategori dagilimi. Degismedikce yeniden uretilmez.
+    const sig = `${label}|${total}|` + categories.map((c) => `${c.category}:${c.amount}`).join(",");
     const text = await this.ai.generateInsight(
       { total, topCategory: categories[0]?.category },
       { userId, sig },
@@ -59,24 +84,13 @@ export class DashboardService {
     return { text };
   }
 
-  // Gunluk harcama serisi. Verinin bulundugu son islemin ayini pencere alir
-  // (seed Haziran'da, "bu ay" bos kalmasin diye), her gun icin toplami doner.
-  async trend() {
+  // Gunluk harcama serisi (secili ay).
+  async trend(month?: string) {
     const userId = await this.currentUserId();
-
-    const latest = await this.prisma.transaction.findFirst({
-      where: { userId },
-      orderBy: { date: "desc" },
-      select: { date: true },
-    });
-    const ref = latest?.date ?? new Date();
-
-    const monthStart = new Date(ref.getFullYear(), ref.getMonth(), 1);
-    const monthEnd = new Date(ref.getFullYear(), ref.getMonth() + 1, 1);
-    const daysInMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
+    const { start, end, daysInMonth, label } = await this.monthWindow(userId, month);
 
     const txns = await this.prisma.transaction.findMany({
-      where: { userId, date: { gte: monthStart, lt: monthEnd } },
+      where: { userId, date: { gte: start, lt: end } },
       select: { date: true, amount: true },
     });
 
@@ -86,14 +100,25 @@ export class DashboardService {
       sums[day - 1] += t.amount.toNumber();
     }
 
-    const label = monthStart.toLocaleDateString("tr-TR", {
-      month: "long",
-      year: "numeric",
-    });
-
     return {
       label,
       points: sums.map((amount, i) => ({ day: i + 1, amount })),
     };
+  }
+
+  // Islemin bulundugu aylar (YYYY-MM), yeniden eskiye — ay secici icin.
+  async months() {
+    const userId = await this.currentUserId();
+    const rows = await this.prisma.transaction.findMany({
+      where: { userId },
+      select: { date: true },
+      orderBy: { date: "desc" },
+    });
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const d = new Date(r.date);
+      seen.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return Array.from(seen);
   }
 }

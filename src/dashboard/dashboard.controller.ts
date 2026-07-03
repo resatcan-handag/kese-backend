@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Query } from "@nestjs/common";
 import { DashboardService } from "./dashboard.service";
 
 @Controller("dashboard")
@@ -6,17 +6,22 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   @Get("summary")
-  summary() {
-    return this.service.summary();
+  summary(@Query("month") month?: string) {
+    return this.service.summary(month);
   }
 
   @Get("insights")
-  insights() {
-    return this.service.insights();
+  insights(@Query("month") month?: string) {
+    return this.service.insights(month);
   }
 
   @Get("trend")
-  trend() {
-    return this.service.trend();
+  trend(@Query("month") month?: string) {
+    return this.service.trend(month);
+  }
+
+  @Get("months")
+  months() {
+    return this.service.months();
   }
 }
