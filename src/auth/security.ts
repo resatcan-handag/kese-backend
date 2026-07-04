@@ -46,7 +46,14 @@ export interface JwtPayload {
   exp: number;
 }
 
-export function signToken(userId: string, ttlSeconds = 60 * 60 * 24 * 7): string {
+// Token omru: JWT_TTL_HOURS (saat) verilirse o, yoksa 24 saat.
+// Kayan oturum (her acilista yenilenir) oldugu icin bu "kullanmayinca cikis" suresidir.
+function tokenTtlSeconds(): number {
+  const h = Number(process.env.JWT_TTL_HOURS);
+  return Number.isFinite(h) && h > 0 ? Math.round(h * 3600) : 24 * 3600;
+}
+
+export function signToken(userId: string, ttlSeconds = tokenTtlSeconds()): string {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "HS256", typ: "JWT" };
   const payload: JwtPayload = { sub: userId, iat: now, exp: now + ttlSeconds };

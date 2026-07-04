@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Scope } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CurrentUser } from "../auth/current-user";
-import { hashPassword, verifyPassword } from "../auth/security";
+import { hashPassword, signToken, verifyPassword } from "../auth/security";
 import { ChangePasswordDto, DeleteAccountDto } from "./dto";
 
 @Injectable({ scope: Scope.REQUEST })
@@ -10,6 +10,12 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly currentUser: CurrentUser,
   ) {}
+
+  // Oturumu yenile: gecerli token'la gelen kullaniciya taze bir token ver
+  // (kayan oturum). Guard token'i dogruladigi icin burada sadece imzalariz.
+  refreshToken() {
+    return { token: signToken(this.currentUser.id) };
+  }
 
   // Oturumdaki kullanicinin profili.
   async me() {

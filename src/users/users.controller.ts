@@ -11,6 +11,11 @@ export class UsersController {
     return this.service.me();
   }
 
+  @Post("refresh-token")
+  refreshToken() {
+    return this.service.refreshToken();
+  }
+
   @Post("change-password")
   changePassword(@Body() dto: ChangePasswordDto) {
     return this.service.changePassword(dto);
