@@ -27,7 +27,8 @@ export class ImportService {
         let categoryId = row.categoryId;
         // Kategori verilmemisse aciklamadan AI onersin.
         if (!categoryId && row.description) {
-          const name = await this.ai.suggestCategory(row.description, names);
+          // Toplu ice aktarma: her satirda LLM cagirma, hizli kural-tabanli.
+          const name = await this.ai.suggestCategory(row.description, names, false);
           categoryId = cats.find((c) => c.name === name)?.id;
         }
         return {

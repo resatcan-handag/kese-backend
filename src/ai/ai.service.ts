@@ -22,8 +22,39 @@ export class AiService {
   // Kullanici basina son icgoru (veri imzasiyla). Veri degismedikce yeniden uretilmez.
   private insightCache = new Map<string, { sig: string; text: string }>();
 
-  // Aciklamadan kategori oner (kural-tabanli, ucretsiz ve hizli — islem eklemeyi yavaslatmaz).
-  async suggestCategory(description: string, categories: string[]): Promise<string> {
+  // Aciklamadan kategori oner. useAi=true ise once yerel Ollama'ya sorar,
+  // basarisiz/kapali ise kural-tabanliya duser. Toplu (CSV) icin useAi=false
+  // verilir ki her satirda LLM cagirmasin (hizli kalsin).
+  async suggestCategory(
+    description: string,
+    categories: string[],
+    useAi = true,
+  ): Promise<string> {
+    if (useAi && description && categories.length > 0) {
+      const ai = await this.ollamaCategory(description, categories);
+      if (ai) return ai;
+    }
+    return this.ruleBasedCategory(description, categories);
+  }
+
+  // Yerel Ollama ile kategori sec; listedeki bir adla eslesmezse null.
+  private async ollamaCategory(description: string, categories: string[]): Promise<string | null> {
+    const text = await this.ollamaChat(
+      "Bir harcamayi verilen kategori listesinden en uygun olanla esle. " +
+        "SADECE kategori adini dondur, baska hicbir sey yazma.",
+      `Aciklama: "${description}"\nKategoriler: ${categories.join(", ")}`,
+    );
+    if (!text) return null;
+    const t = text.trim().toLowerCase();
+    const exact = categories.find((c) => c.toLowerCase() === t);
+    if (exact) return exact;
+    const partial = categories.find(
+      (c) => t.includes(c.toLowerCase()) || c.toLowerCase().includes(t),
+    );
+    return partial ?? null;
+  }
+
+  private ruleBasedCategory(description: string, categories: string[]): string {
     const d = (description || "").toLowerCase();
     if (d.includes("market") || d.includes("migros") || d.includes("sok")) return "Market";
     if (d.includes("taksi") || d.includes("otobus") || d.includes("metro")) return "Ulasim";
