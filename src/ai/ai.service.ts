@@ -19,8 +19,9 @@ interface ExtractedReceipt {
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  // Kullanici basina son icgoru (veri imzasiyla). Veri degismedikce yeniden uretilmez.
-  private insightCache = new Map<string, { sig: string; text: string }>();
+  // Icgoru onbellegi: anahtar `${userId}|${sig}`. Her ay/veri durumu ayri saklanir,
+  // boylece aylar arasi geciste (ve geri donuste) yeniden uretilmez.
+  private insightCache = new Map<string, string>();
 
   // Aciklamadan kategori oner. useAi=true ise once yerel Ollama'ya sorar,
   // basarisiz/kapali ise kural-tabanliya duser. Toplu (CSV) icin useAi=false
@@ -63,16 +64,15 @@ export class AiService {
     return categories[0] ?? "Diger";
   }
 
-  // Aylik ozetten dogal dille icgoru uret — yerel Ollama modeliyle (ucretsiz).
-  // cache verilirse: ayni veri imzasi (sig) icin onbellekten doner; sadece veri
-  // degisince yeniden uretilir (her yenilemede degismesin diye).
+  // Aylik ozetten dogal dille icgoru uret
   async generateInsight(
     stats: { total: number; topCategory?: string },
     cache?: { userId: string; sig: string },
   ): Promise<string> {
-    if (cache) {
-      const hit = this.insightCache.get(cache.userId);
-      if (hit && hit.sig === cache.sig) return hit.text;
+    const key = cache ? `${cache.userId}|${cache.sig}` : "";
+    if (key) {
+      const hit = this.insightCache.get(key);
+      if (hit) return hit;
     }
     const user =
       `Bu ay toplam ${stats.total.toLocaleString("tr-TR")} TL harcandi.` +
@@ -86,7 +86,14 @@ export class AiService {
     // Sadece gercek (Ollama) sonuclari onbellekle; placeholder onbelleklenmez
     // ki Ollama sonradan acilinca ilk yenilemede gercek icgoru gelsin.
     if (text) {
-      if (cache) this.insightCache.set(cache.userId, { sig: cache.sig, text });
+      if (key) {
+        this.insightCache.set(key, text);
+        // Sinirsiz buyumesin: cok kayit olursa en eskiyi at.
+        if (this.insightCache.size > 50) {
+          const oldest = this.insightCache.keys().next().value;
+          if (oldest !== undefined) this.insightCache.delete(oldest);
+        }
+      }
       return text;
     }
     return this.placeholderInsight(stats);
